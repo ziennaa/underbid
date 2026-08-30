@@ -26,3 +26,41 @@ class NegotiationCreate(BaseModel):
 class NegotiationCreatedResponse(BaseModel):
     negotiation_id: int
     status: Literal["CREATED"]
+
+from datetime import datetime
+
+class OfferPublic(BaseModel):
+    seller_name: str
+    price: Decimal
+    base_price: Decimal
+    delivery_days: int
+    warranty_months: int
+    addons: list[str]
+    status: str
+    utility_score: float | None
+
+
+class RoundPublic(BaseModel):
+    round_number: int
+    offers: list[OfferPublic]
+
+
+class NegotiationPublic(BaseModel):
+    id: int
+
+    product: str
+    budget: Decimal
+    max_delivery_days: int
+
+    price_weight: float
+    delivery_weight: float
+    warranty_weight: float
+
+    status: str
+
+    winner_seller_name: str | None
+    final_price: Decimal | None
+
+    created_at: datetime
+
+    rounds: list[RoundPublic]
