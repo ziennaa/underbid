@@ -64,3 +64,7 @@ class NegotiationPublic(BaseModel):
     created_at: datetime
 
     rounds: list[RoundPublic]
+
+class NegotiationStartResponse(BaseModel):
+    negotiation_id: int
+    status: Literal["RUNNING"]

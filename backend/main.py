@@ -5,6 +5,7 @@ from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
 from fastapi import (
+    BackgroundTasks,
     Depends,
     FastAPI,
     HTTPException,
@@ -24,9 +25,11 @@ from .schemas import (
     NegotiationCreate,
     NegotiationCreatedResponse,
     NegotiationPublic,
+    NegotiationStartResponse,
     OfferPublic,
     RoundPublic,
 )
+from .service import run_and_stream_negotiation
 from .seller_factory import make_sellers
 
 
@@ -207,6 +210,51 @@ def get_negotiation(
         created_at=negotiation.created_at,
         rounds=rounds,
     )
+@app.post(
+    "/api/negotiations/{negotiation_id}/start",
+    response_model=NegotiationStartResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
+def start_negotiation(
+    negotiation_id: int,
+    background_tasks: BackgroundTasks,
+    session: Session = Depends(get_session),
+) -> NegotiationStartResponse:
+
+    negotiation = session.get(
+        NegotiationDB,
+        negotiation_id,
+    )
+
+    if negotiation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Negotiation not found",
+        )
+
+    if negotiation.status != "CREATED":
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "Negotiation has already been started"
+            ),
+        )
+
+    negotiation.status = "RUNNING"
+
+    session.add(negotiation)
+    session.commit()
+
+    background_tasks.add_task(
+        run_and_stream_negotiation,
+        negotiation_id,
+    )
+
+    return NegotiationStartResponse(
+        negotiation_id=negotiation_id,
+        status="RUNNING",
+    )
+
 
 @app.websocket(
     "/ws/negotiations/{negotiation_id}"
