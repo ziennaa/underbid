@@ -47,12 +47,36 @@ class SellerPrivateConfigDB(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     negotiation_id: int = Field(foreign_key="negotiations.id", index=True)
     seller_name: str = Field(index=True)
-    cost_price: Decimal = Field(sa_column=Column(MONEY_TYPE, nullable=False))
-    opening_price: Decimal = Field(sa_column=Column(MONEY_TYPE, nullable=False))
-    floor_price: Decimal = Field(sa_column=Column(MONEY_TYPE, nullable=False))
-    concession_rate: Decimal = Field(sa_column=Column(RATE_TYPE, nullable=False))
-    strategy: str
 
+    cost_price: Decimal = Field(
+        sa_column=Column(MONEY_TYPE, nullable=False)
+    )
+    opening_price: Decimal = Field(
+        sa_column=Column(MONEY_TYPE, nullable=False)
+    )
+    floor_price: Decimal = Field(
+        sa_column=Column(MONEY_TYPE, nullable=False)
+    )
+    concession_rate: Decimal = Field(
+        sa_column=Column(RATE_TYPE, nullable=False)
+    )
+
+    delivery_options: list[dict[str, Any]] = Field(
+        default_factory=list,
+        sa_column=Column(JSON, nullable=False),
+    )
+
+    warranty_options: list[int] = Field(
+        default_factory=list,
+        sa_column=Column(JSON, nullable=False),
+    )
+
+    addon_costs: dict[str, str] = Field(
+        default_factory=dict,
+        sa_column=Column(JSON, nullable=False),
+    )
+
+    strategy: str
 
 class OfferDB(SQLModel, table=True):
     __tablename__ = "offers"
