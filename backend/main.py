@@ -4,7 +4,15 @@ import json
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import Depends, FastAPI, HTTPException, status
+from fastapi import (
+    Depends,
+    FastAPI,
+    HTTPException,
+    WebSocket,
+    WebSocketDisconnect,
+    status,
+)
+from .manager import manager
 from pydantic import ValidationError
 from sqlmodel import Session, select
 
@@ -199,3 +207,28 @@ def get_negotiation(
         created_at=negotiation.created_at,
         rounds=rounds,
     )
+
+@app.websocket(
+    "/ws/negotiations/{negotiation_id}"
+)
+async def negotiation_websocket(
+    websocket: WebSocket,
+    negotiation_id: int,
+) -> None:
+
+    await websocket.accept()
+
+    manager.connect(
+        negotiation_id,
+        websocket,
+    )
+
+    try:
+        while True:
+            await websocket.receive_text()
+
+    except WebSocketDisconnect:
+        manager.disconnect(
+            negotiation_id,
+            websocket,
+        )
