@@ -689,17 +689,21 @@ const socketRef = useRef<WebSocket | null>(null);
 </section>
 )}
 
-        {negotiationId !== null && (
+{negotiationId !== null && (
   <section className="mt-16 border-t border-neutral-900 pt-10">
-    <div className="mb-6 flex items-end justify-between">
+    <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
       <div>
         <p className="text-xs uppercase tracking-[0.2em] text-neutral-600">
-          Negotiation telemetry
+          Negotiation record
         </p>
 
         <h2 className="mt-2 text-2xl font-medium">
-          Live event stream
+          Audit trail
         </h2>
+
+        <p className="mt-2 text-sm text-neutral-600">
+          Every market action is recorded as it happens.
+        </p>
       </div>
 
       <span className="font-mono text-xs text-neutral-500">
@@ -709,34 +713,21 @@ const socketRef = useRef<WebSocket | null>(null);
 
     {receivedEvents.length === 0 ? (
       <div className="rounded-2xl border border-neutral-900 bg-neutral-950 p-6 text-sm text-neutral-600">
-        Waiting for negotiation events...
+        Waiting for negotiation activity...
       </div>
     ) : (
-      <div className="space-y-3">
+      <div className="rounded-3xl border border-neutral-900 bg-neutral-950">
         {receivedEvents.map(
           (event, index) => (
-            <div
+            <AuditEvent
               key={index}
-              className="rounded-2xl border border-neutral-900 bg-neutral-950 p-5"
-            >
-              <div className="mb-3 flex items-center justify-between">
-                <span className="font-mono text-sm text-neutral-300">
-                  {event.event_type}
-                </span>
-
-                <span className="font-mono text-xs text-neutral-700">
-                  #{index + 1}
-                </span>
-              </div>
-
-              <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs leading-6 text-neutral-500">
-                {JSON.stringify(
-                  event,
-                  null,
-                  2,
-                )}
-              </pre>
-            </div>
+              event={event}
+              index={index}
+              isLast={
+                index ===
+                receivedEvents.length - 1
+              }
+            />
           ),
         )}
       </div>
@@ -977,6 +968,158 @@ function NoDealResult({
       </div>
     </section>
   );
+}
+function AuditEvent({
+  event,
+  index,
+  isLast,
+}: {
+  event: NegotiationEvent;
+  index: number;
+  isLast: boolean;
+}) {
+  const presentation =
+    getAuditPresentation(event);
+
+  return (
+    <div
+      className={`relative px-6 py-5 ${
+        !isLast
+          ? "border-b border-neutral-900"
+          : ""
+      }`}
+    >
+      <div className="flex gap-4">
+        <div className="flex flex-col items-center">
+          <span
+            className={`mt-1 h-2.5 w-2.5 rounded-full ${
+              presentation.tone === "success"
+                ? "bg-emerald-400"
+                : presentation.tone === "failure"
+                  ? "bg-red-400"
+                  : presentation.tone === "offer"
+                    ? "bg-neutral-300"
+                    : "bg-neutral-700"
+            }`}
+          />
+        </div>
+
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div>
+              <p
+                className={`font-mono text-sm ${
+                  presentation.tone === "success"
+                    ? "text-emerald-400"
+                    : presentation.tone === "failure"
+                      ? "text-red-400"
+                      : "text-neutral-300"
+                }`}
+              >
+                {presentation.title}
+              </p>
+
+              <p className="mt-1 text-sm text-neutral-600">
+                {presentation.description}
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3">
+              {"round_number" in event &&
+                event.round_number !==
+                  undefined && (
+                  <span className="font-mono text-xs text-neutral-700">
+                    R{event.round_number}
+                  </span>
+                )}
+
+              <span className="font-mono text-xs text-neutral-800">
+                #{index + 1}
+              </span>
+            </div>
+          </div>
+
+          <details className="group mt-3">
+            <summary className="cursor-pointer list-none font-mono text-[10px] uppercase tracking-[0.15em] text-neutral-700 transition hover:text-neutral-500">
+              View event payload
+            </summary>
+
+            <pre className="mt-3 overflow-x-auto whitespace-pre-wrap break-words rounded-xl border border-neutral-900 bg-neutral-950 p-4 font-mono text-xs leading-6 text-neutral-600">
+              {JSON.stringify(
+                event,
+                null,
+                2,
+              )}
+            </pre>
+          </details>
+        </div>
+      </div>
+    </div>
+  );
+}
+function getAuditPresentation(
+  event: NegotiationEvent,
+): {
+  title: string;
+  description: string;
+  tone:
+    | "neutral"
+    | "offer"
+    | "success"
+    | "failure";
+} {
+  switch (event.event_type) {
+    case "ROUND_STARTED":
+      return {
+        title: `ROUND ${event.round_number} STARTED`,
+        description:
+          "Sellers are evaluating their next competitive offers.",
+        tone: "neutral",
+      };
+
+    case "OFFER_CREATED":
+      return {
+        title: `${event.seller_name} OFFERED ${formatCurrency(
+          event.price,
+        )}`,
+        description: `${event.delivery_days} day${
+          event.delivery_days === 1
+            ? ""
+            : "s"
+        } delivery · ${
+          event.warranty_months
+        } month warranty`,
+        tone: "offer",
+      };
+
+    case "SELLER_WALKED":
+      return {
+        title: `${event.seller_name} WALKED AWAY`,
+        description:
+          "The seller exited after reaching its private economic boundary.",
+        tone: "failure",
+      };
+
+    case "DEAL_FOUND":
+      return {
+        title: "DEAL FOUND",
+        description: `${
+          event.seller_name
+        } won at ${formatCurrency(
+          event.price,
+        )}.`,
+        tone: "success",
+      };
+
+    case "NO_DEAL":
+      return {
+        title: "NO DEAL",
+        description:
+          event.reason ||
+          "No offer satisfied the buyer's hard constraints.",
+        tone: "failure",
+      };
+  }
 }
 function SellerCard({
   sellerName,
