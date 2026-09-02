@@ -13,6 +13,7 @@ import {
 
 import {
   connectNegotiationSocket,
+  type NegotiationEvent,
 } from "@/lib/socket";
 
 type WeightKey = "price" | "delivery" | "warranty";
@@ -48,11 +49,17 @@ const [negotiationId, setNegotiationId] =
     warranty: 15,
   });
   const [negotiationStatus, setNegotiationStatus] =
-  useState<"CREATED" | "RUNNING">("CREATED");
+  useState<
+    "CREATED" |
+    "RUNNING" |
+    "DEAL_FOUND" |
+    "NO_DEAL"
+  >("CREATED");
 
 const [startError, setStartError] =
   useState<string | null>(null);
-
+const [receivedEvents, setReceivedEvents] =
+  useState<NegotiationEvent[]>([]);
 const socketRef = useRef<WebSocket | null>(null);
   const [socketStatus, setSocketStatus] =
   useState<
@@ -72,8 +79,6 @@ const socketRef = useRef<WebSocket | null>(null);
       negotiationId,
       {
         onOpen: async () => {
-          // Ignore an old socket if React has already
-          // replaced it with a newer connection.
           if (socketRef.current !== socket) {
             return;
           }
@@ -95,7 +100,20 @@ const socketRef = useRef<WebSocket | null>(null);
             }
           }
         },
-  
+        onEvent: (event) => {
+          setReceivedEvents((previous) => [
+            ...previous,
+            event,
+          ]);
+        
+          if (event.event_type === "DEAL_FOUND") {
+            setNegotiationStatus("DEAL_FOUND");
+          }
+        
+          if (event.event_type === "NO_DEAL") {
+            setNegotiationStatus("NO_DEAL");
+          }
+        },
         onClose: () => {
           if (socketRef.current === socket) {
             setSocketStatus("DISCONNECTED");
@@ -185,6 +203,7 @@ const socketRef = useRef<WebSocket | null>(null);
       setNegotiationId(null);
       setNegotiationStatus("CREATED");
       setSocketStatus("DISCONNECTED");
+      setReceivedEvents([]);
     
       try {
         const result = await createNegotiation({
@@ -475,7 +494,60 @@ const socketRef = useRef<WebSocket | null>(null);
             </div>
           </div>
         </section>
+        {negotiationId !== null && (
+  <section className="mt-16 border-t border-neutral-900 pt-10">
+    <div className="mb-6 flex items-end justify-between">
+      <div>
+        <p className="text-xs uppercase tracking-[0.2em] text-neutral-600">
+          Negotiation telemetry
+        </p>
 
+        <h2 className="mt-2 text-2xl font-medium">
+          Live event stream
+        </h2>
+      </div>
+
+      <span className="font-mono text-xs text-neutral-500">
+        {receivedEvents.length} EVENTS
+      </span>
+    </div>
+
+    {receivedEvents.length === 0 ? (
+      <div className="rounded-2xl border border-neutral-900 bg-neutral-950 p-6 text-sm text-neutral-600">
+        Waiting for negotiation events...
+      </div>
+    ) : (
+      <div className="space-y-3">
+        {receivedEvents.map(
+          (event, index) => (
+            <div
+              key={index}
+              className="rounded-2xl border border-neutral-900 bg-neutral-950 p-5"
+            >
+              <div className="mb-3 flex items-center justify-between">
+                <span className="font-mono text-sm text-neutral-300">
+                  {event.event_type}
+                </span>
+
+                <span className="font-mono text-xs text-neutral-700">
+                  #{index + 1}
+                </span>
+              </div>
+
+              <pre className="overflow-x-auto whitespace-pre-wrap break-words font-mono text-xs leading-6 text-neutral-500">
+                {JSON.stringify(
+                  event,
+                  null,
+                  2,
+                )}
+              </pre>
+            </div>
+          ),
+        )}
+      </div>
+    )}
+  </section>
+)}
         <section className="mt-24 grid gap-5 border-t border-neutral-900 pt-8 md:grid-cols-3">
           <InfoBlock
             number="01"
