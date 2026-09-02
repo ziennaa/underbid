@@ -1,8 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import {
+  useEffect,
+  useState,
+} from "react";
 
 import { createNegotiation } from "@/lib/api";
+
+import {
+  connectNegotiationSocket,
+} from "@/lib/socket";
 
 type WeightKey = "price" | "delivery" | "warranty";
 
@@ -36,6 +43,43 @@ const [negotiationId, setNegotiationId] =
     delivery: 25,
     warranty: 15,
   });
+  const [socketStatus, setSocketStatus] =
+  useState<
+    "DISCONNECTED" |
+    "CONNECTING" |
+    "CONNECTED" |
+    "ERROR"
+  >("DISCONNECTED");
+
+
+  useEffect(() => {
+    if (negotiationId === null) {
+      return;
+    }
+  
+  
+    const socket = connectNegotiationSocket(
+      negotiationId,
+      {
+        onOpen: () => {
+          setSocketStatus("CONNECTED");
+        },
+  
+  
+        onClose: () => {
+          setSocketStatus("DISCONNECTED");
+        },
+  
+        onError: () => {
+          setSocketStatus("ERROR");
+        },
+      },
+    );
+  
+    return () => {
+      socket.close();
+    };
+  }, [negotiationId]);
 
   function updateWeight(
     changedKey: WeightKey,
@@ -98,6 +142,7 @@ const [negotiationId, setNegotiationId] =
       setIsCreating(true);
       setCreateError(null);
       setNegotiationId(null);
+      setSocketStatus("DISCONNECTED");
     
       try {
         const result = await createNegotiation({
@@ -113,6 +158,7 @@ const [negotiationId, setNegotiationId] =
           seed: null,
         });
     
+        setSocketStatus("CONNECTING");
         setNegotiationId(result.negotiation_id);
       } catch (error) {
         if (error instanceof Error) {
@@ -331,8 +377,44 @@ const [negotiationId, setNegotiationId] =
 </button>
 
 {negotiationId !== null && (
-  <div className="rounded-xl border border-emerald-900/50 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-400">
-    Market #{negotiationId} created successfully.
+  <div className="space-y-2 rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-4">
+    <div className="flex items-center justify-between">
+      <span className="text-sm text-neutral-300">
+        Market #{negotiationId}
+      </span>
+
+      <span className="font-mono text-xs text-neutral-600">
+        CREATED
+      </span>
+    </div>
+
+    <div className="flex items-center gap-2">
+      <span
+        className={`h-2 w-2 rounded-full ${
+          socketStatus === "CONNECTED"
+            ? "bg-emerald-400"
+            : socketStatus === "CONNECTING"
+              ? "bg-yellow-400"
+              : socketStatus === "ERROR"
+                ? "bg-red-400"
+                : "bg-neutral-600"
+        }`}
+      />
+
+      <span className="text-xs text-neutral-500">
+        {socketStatus === "CONNECTED" &&
+          "Live connection established"}
+
+        {socketStatus === "CONNECTING" &&
+          "Connecting to negotiation stream..."}
+
+        {socketStatus === "DISCONNECTED" &&
+          "Live connection disconnected"}
+
+        {socketStatus === "ERROR" &&
+          "Live connection failed"}
+      </span>
+    </div>
   </div>
 )}
 
