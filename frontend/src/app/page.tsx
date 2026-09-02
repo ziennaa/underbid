@@ -307,7 +307,9 @@ const socketRef = useRef<WebSocket | null>(null);
                 dealFoundEvent.seller_name,
             )
         : null;
-    async function handleCreateNegotiation() {
+        async function handleCreateNegotiation(
+          randomizeSellers: boolean,
+        ) {
       if (!formValid || isCreating) {
         return;
       }
@@ -330,8 +332,10 @@ const socketRef = useRef<WebSocket | null>(null);
           delivery_weight: weights.delivery / 100,
           warranty_weight: weights.warranty / 100,
     
-          randomize_sellers: false,
-          seed: null,
+          randomize_sellers: randomizeSellers,
+seed: randomizeSellers
+  ? Date.now()
+  : null,
         });
     
         setSocketStatus("CONNECTING");
@@ -544,14 +548,30 @@ const socketRef = useRef<WebSocket | null>(null);
               <button
   type="button"
   disabled={!formValid || isCreating}
-  onClick={handleCreateNegotiation}
+  onClick={() =>
+    handleCreateNegotiation(false)
+  }
   className="mt-3 w-full rounded-xl bg-white px-4 py-4 font-medium text-black transition enabled:hover:bg-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
 >
   {isCreating
     ? "Creating market..."
     : "Start negotiation"}
 </button>
+<button
+  type="button"
+  disabled={!formValid || isCreating}
+  onClick={() =>
+    handleCreateNegotiation(true)
+  }
+  className="w-full rounded-xl border border-neutral-700 bg-neutral-950 px-4 py-4 font-medium text-neutral-300 transition enabled:hover:border-neutral-500 enabled:hover:bg-neutral-900 disabled:cursor-not-allowed disabled:border-neutral-800 disabled:text-neutral-600"
+>
+  🎲 Randomize market
+</button>
 
+<p className="text-center text-xs leading-5 text-neutral-600">
+  Generates new hidden seller economics
+  before starting the negotiation.
+</p>
 {negotiationId !== null && (
   <div className="space-y-2 rounded-xl border border-neutral-800 bg-neutral-950 px-4 py-4">
     <div className="flex items-center justify-between">
