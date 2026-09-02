@@ -2,6 +2,8 @@
 
 import { useState } from "react";
 
+import { createNegotiation } from "@/lib/api";
+
 type WeightKey = "price" | "delivery" | "warranty";
 
 type Weights = {
@@ -19,6 +21,13 @@ const WEIGHT_KEYS: WeightKey[] = [
 export default function Home() {
   const [product, setProduct] = useState("");
   const [budget, setBudget] = useState("");
+  const [isCreating, setIsCreating] = useState(false);
+
+const [createError, setCreateError] =
+  useState<string | null>(null);
+
+const [negotiationId, setNegotiationId] =
+  useState<number | null>(null);
   const [maxDeliveryDays, setMaxDeliveryDays] =
     useState(4);
 
@@ -81,6 +90,42 @@ export default function Home() {
     budget.length > 0 &&
     Number.isFinite(parsedBudget) &&
     parsedBudget > 0;
+    async function handleCreateNegotiation() {
+      if (!formValid || isCreating) {
+        return;
+      }
+    
+      setIsCreating(true);
+      setCreateError(null);
+      setNegotiationId(null);
+    
+      try {
+        const result = await createNegotiation({
+          product: product.trim(),
+          budget: parsedBudget,
+          max_delivery_days: maxDeliveryDays,
+    
+          price_weight: weights.price / 100,
+          delivery_weight: weights.delivery / 100,
+          warranty_weight: weights.warranty / 100,
+    
+          randomize_sellers: false,
+          seed: null,
+        });
+    
+        setNegotiationId(result.negotiation_id);
+      } catch (error) {
+        if (error instanceof Error) {
+          setCreateError(error.message);
+        } else {
+          setCreateError(
+            "Something went wrong while creating the negotiation.",
+          );
+        }
+      } finally {
+        setIsCreating(false);
+      }
+    }
 
   return (
     <main className="min-h-screen bg-neutral-950 text-white">
@@ -275,12 +320,27 @@ export default function Home() {
               </div>
 
               <button
-                type="button"
-                disabled={!formValid}
-                className="mt-3 w-full rounded-xl bg-white px-4 py-4 font-medium text-black transition enabled:hover:bg-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
-              >
-                Start negotiation
-              </button>
+  type="button"
+  disabled={!formValid || isCreating}
+  onClick={handleCreateNegotiation}
+  className="mt-3 w-full rounded-xl bg-white px-4 py-4 font-medium text-black transition enabled:hover:bg-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
+>
+  {isCreating
+    ? "Creating market..."
+    : "Start negotiation"}
+</button>
+
+{negotiationId !== null && (
+  <div className="rounded-xl border border-emerald-900/50 bg-emerald-950/20 px-4 py-3 text-sm text-emerald-400">
+    Market #{negotiationId} created successfully.
+  </div>
+)}
+
+{createError && (
+  <div className="rounded-xl border border-red-900/50 bg-red-950/20 px-4 py-3 text-sm text-red-400">
+    {createError}
+  </div>
+)}
 
               {!formValid && (
                 <p className="text-center text-xs text-neutral-600">
