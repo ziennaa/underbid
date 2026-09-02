@@ -655,10 +655,12 @@ const socketRef = useRef<WebSocket | null>(null);
       {sellerHistories.map(
         ({ sellerName, offers }) => (
           <SellerCard
-            key={sellerName}
-            sellerName={sellerName}
-            offers={offers}
-          />
+              key={sellerName}
+              sellerName={sellerName}
+              offers={offers}
+              budget={parsedBudget}
+              maxDeliveryDays={maxDeliveryDays}
+            />
         ),
       )}
     </div>
@@ -979,26 +981,42 @@ function NoDealResult({
 function SellerCard({
   sellerName,
   offers,
+  budget,
+  maxDeliveryDays,
 }: {
   sellerName: string;
   offers: OfferCreatedEvent[];
+  budget: number;
+  maxDeliveryDays: number;
 }) {
   const latestOffer =
-    offers.length > 0
-      ? offers[offers.length - 1]
-      : null;
+  offers.length > 0
+    ? offers[offers.length - 1]
+    : null;
 
-  const isAccepted =
-    latestOffer?.status === "ACCEPTED";
+const isAccepted =
+  latestOffer?.status === "ACCEPTED";
+  const exceedsBudget =
+  latestOffer !== null &&
+  Number(latestOffer.price) > budget;
 
+const exceedsDelivery =
+  latestOffer !== null &&
+  latestOffer.delivery_days >
+    maxDeliveryDays;
+
+const violatesHardConstraint =
+  exceedsBudget || exceedsDelivery;
   return (
     <div
-      className={`rounded-3xl border p-6 transition ${
-        isAccepted
-          ? "border-emerald-800 bg-emerald-950/10"
-          : "border-neutral-800 bg-neutral-900/40"
-      }`}
-    >
+  className={`rounded-3xl border p-6 transition ${
+    isAccepted
+      ? "border-emerald-800 bg-emerald-950/10"
+      : violatesHardConstraint
+        ? "border-red-900/50 bg-red-950/5"
+        : "border-neutral-800 bg-neutral-900/40"
+  }`}
+>
       <div className="mb-8 flex items-center justify-between">
         <div>
           <p className="text-xs uppercase tracking-[0.2em] text-neutral-600">
@@ -1010,17 +1028,25 @@ function SellerCard({
           </h3>
         </div>
 
-        <span
-          className={`rounded-full px-3 py-1 font-mono text-xs ${
-            isAccepted
-              ? "bg-emerald-950 text-emerald-400"
-              : latestOffer
-                ? "bg-neutral-800 text-neutral-400"
-                : "bg-neutral-900 text-neutral-600"
-          }`}
-        >
-          {latestOffer?.status ?? "WAITING"}
-        </span>
+        <div className="flex flex-col items-end gap-2">
+  <span
+    className={`rounded-full px-3 py-1 font-mono text-xs ${
+      isAccepted
+        ? "bg-emerald-950 text-emerald-400"
+        : latestOffer
+          ? "bg-neutral-800 text-neutral-400"
+          : "bg-neutral-900 text-neutral-600"
+    }`}
+  >
+    {latestOffer?.status ?? "WAITING"}
+  </span>
+
+  {violatesHardConstraint && (
+    <span className="rounded-full border border-red-900/50 bg-red-950/20 px-3 py-1 font-mono text-[10px] text-red-400">
+      HARD CONSTRAINT VIOLATED
+    </span>
+  )}
+</div>
       </div>
 
       {latestOffer ? (
@@ -1029,12 +1055,18 @@ function SellerCard({
             <p className="text-sm text-neutral-600">
               Current offer
             </p>
-
             <p className="mt-2 text-4xl font-medium tracking-tight">
-              {formatCurrency(
-                latestOffer.price,
-              )}
-            </p>
+  {formatCurrency(
+    latestOffer.price,
+  )}
+</p>
+
+            {exceedsBudget && (
+  <p className="mt-2 font-mono text-xs text-red-400">
+    ABOVE ₹
+    {budget.toLocaleString("en-IN")} HARD BUDGET
+  </p>
+)}
 
             <p className="mt-2 font-mono text-xs text-neutral-600">
               ROUND{" "}
@@ -1043,16 +1075,21 @@ function SellerCard({
           </div>
 
           <div className="grid grid-cols-2 gap-3">
-            <Metric
-              label="Delivery"
-              value={`${latestOffer.delivery_days} days`}
-            />
+  <Metric
+    label="Delivery"
+    value={`${latestOffer.delivery_days} days`}
+    warning={
+      exceedsDelivery
+        ? `Buyer limit: ${maxDeliveryDays} days`
+        : undefined
+    }
+  />
 
-            <Metric
-              label="Warranty"
-              value={`${latestOffer.warranty_months} mo`}
-            />
-          </div>
+  <Metric
+    label="Warranty"
+    value={`${latestOffer.warranty_months} mo`}
+  />
+</div>
 
           <div className="mt-6 border-t border-neutral-800 pt-5">
             <p className="mb-3 text-xs uppercase tracking-[0.15em] text-neutral-600">
@@ -1135,19 +1172,39 @@ function SellerCard({
 function Metric({
   label,
   value,
+  warning,
 }: {
   label: string;
   value: string;
+  warning?: string;
 }) {
   return (
-    <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4">
+    <div
+      className={`rounded-xl border bg-neutral-950 p-4 ${
+        warning
+          ? "border-red-900/50"
+          : "border-neutral-800"
+      }`}
+    >
       <p className="text-xs text-neutral-600">
         {label}
       </p>
 
-      <p className="mt-1 text-sm text-neutral-300">
+      <p
+        className={`mt-1 text-sm ${
+          warning
+            ? "text-red-300"
+            : "text-neutral-300"
+        }`}
+      >
         {value}
       </p>
+
+      {warning && (
+        <p className="mt-2 font-mono text-[10px] text-red-500">
+          {warning}
+        </p>
+      )}
     </div>
   );
 }
