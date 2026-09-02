@@ -2,10 +2,14 @@
 
 import {
   useEffect,
+  useRef,
   useState,
 } from "react";
 
-import { createNegotiation } from "@/lib/api";
+import {
+  createNegotiation,
+  startNegotiation,
+} from "@/lib/api";
 
 import {
   connectNegotiationSocket,
@@ -43,6 +47,13 @@ const [negotiationId, setNegotiationId] =
     delivery: 25,
     warranty: 15,
   });
+  const [negotiationStatus, setNegotiationStatus] =
+  useState<"CREATED" | "RUNNING">("CREATED");
+
+const [startError, setStartError] =
+  useState<string | null>(null);
+
+const socketRef = useRef<WebSocket | null>(null);
   const [socketStatus, setSocketStatus] =
   useState<
     "DISCONNECTED" |
@@ -57,26 +68,55 @@ const [negotiationId, setNegotiationId] =
       return;
     }
   
-  
     const socket = connectNegotiationSocket(
       negotiationId,
       {
-        onOpen: () => {
+        onOpen: async () => {
+          // Ignore an old socket if React has already
+          // replaced it with a newer connection.
+          if (socketRef.current !== socket) {
+            return;
+          }
+  
           setSocketStatus("CONNECTED");
+          setStartError(null);
+  
+          try {
+            await startNegotiation(negotiationId);
+  
+            setNegotiationStatus("RUNNING");
+          } catch (error) {
+            if (error instanceof Error) {
+              setStartError(error.message);
+            } else {
+              setStartError(
+                "Failed to start the negotiation.",
+              );
+            }
+          }
         },
   
-  
         onClose: () => {
-          setSocketStatus("DISCONNECTED");
+          if (socketRef.current === socket) {
+            setSocketStatus("DISCONNECTED");
+          }
         },
   
         onError: () => {
-          setSocketStatus("ERROR");
+          if (socketRef.current === socket) {
+            setSocketStatus("ERROR");
+          }
         },
       },
     );
   
+    socketRef.current = socket;
+  
     return () => {
+      if (socketRef.current === socket) {
+        socketRef.current = null;
+      }
+  
       socket.close();
     };
   }, [negotiationId]);
@@ -141,7 +181,9 @@ const [negotiationId, setNegotiationId] =
     
       setIsCreating(true);
       setCreateError(null);
+      setStartError(null);
       setNegotiationId(null);
+      setNegotiationStatus("CREATED");
       setSocketStatus("DISCONNECTED");
     
       try {
@@ -384,8 +426,8 @@ const [negotiationId, setNegotiationId] =
       </span>
 
       <span className="font-mono text-xs text-neutral-600">
-        CREATED
-      </span>
+  {negotiationStatus}
+</span>
     </div>
 
     <div className="flex items-center gap-2">
@@ -418,9 +460,9 @@ const [negotiationId, setNegotiationId] =
   </div>
 )}
 
-{createError && (
+{startError && (
   <div className="rounded-xl border border-red-900/50 bg-red-950/20 px-4 py-3 text-sm text-red-400">
-    {createError}
+    {startError}
   </div>
 )}
 
