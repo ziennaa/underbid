@@ -1,5 +1,5 @@
 "use client";
-
+import PriceConvergenceChart from "@/components/PriceConvergenceChart";
 import {
   useEffect,
   useRef,
@@ -224,6 +224,54 @@ const socketRef = useRef<WebSocket | null>(null);
             offer.seller_name === sellerName,
         ),
       }),
+    );
+    const chartData = Array.from(
+      {
+        length: currentRound,
+      },
+      (_, index) => {
+        const round = index + 1;
+    
+        const sellerAOffer =
+          offerEvents.find(
+            (offer) =>
+              offer.round_number === round &&
+              offer.seller_name ===
+                "SELLER A",
+          );
+    
+        const sellerBOffer =
+          offerEvents.find(
+            (offer) =>
+              offer.round_number === round &&
+              offer.seller_name ===
+                "SELLER B",
+          );
+    
+        const sellerCOffer =
+          offerEvents.find(
+            (offer) =>
+              offer.round_number === round &&
+              offer.seller_name ===
+                "SELLER C",
+          );
+    
+        return {
+          round,
+    
+          sellerA: sellerAOffer
+            ? Number(sellerAOffer.price)
+            : null,
+    
+          sellerB: sellerBOffer
+            ? Number(sellerBOffer.price)
+            : null,
+    
+          sellerC: sellerCOffer
+            ? Number(sellerCOffer.price)
+            : null,
+        };
+      },
     );
     async function handleCreateNegotiation() {
       if (!formValid || isCreating) {
@@ -580,6 +628,12 @@ const socketRef = useRef<WebSocket | null>(null);
         ),
       )}
     </div>
+    <div className="mt-6">
+  <PriceConvergenceChart
+    data={chartData}
+    budget={parsedBudget}
+  />
+</div>
   </section>
 )}
         {negotiationId !== null && (
