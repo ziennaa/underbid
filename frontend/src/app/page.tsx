@@ -13,7 +13,9 @@ import {
 
 import {
   connectNegotiationSocket,
+  type DealFoundEvent,
   type NegotiationEvent,
+  type NoDealEvent,
   type OfferCreatedEvent,
 } from "@/lib/socket";
 
@@ -273,6 +275,38 @@ const socketRef = useRef<WebSocket | null>(null);
         };
       },
     );
+    const dealFoundEvent = receivedEvents.findLast(
+      (
+        event,
+      ): event is DealFoundEvent =>
+        event.event_type === "DEAL_FOUND",
+    );
+    
+    const noDealEvent = receivedEvents.findLast(
+      (
+        event,
+      ): event is NoDealEvent =>
+        event.event_type === "NO_DEAL",
+    );
+    
+    const winningOffer =
+      dealFoundEvent
+        ? [...offerEvents]
+            .reverse()
+            .find(
+              (offer) =>
+                offer.seller_name ===
+                  dealFoundEvent.seller_name &&
+                offer.status === "ACCEPTED",
+            ) ??
+          [...offerEvents]
+            .reverse()
+            .find(
+              (offer) =>
+                offer.seller_name ===
+                dealFoundEvent.seller_name,
+            )
+        : null;
     async function handleCreateNegotiation() {
       if (!formValid || isCreating) {
         return;
@@ -634,8 +668,25 @@ const socketRef = useRef<WebSocket | null>(null);
     budget={parsedBudget}
   />
 </div>
-  </section>
+
+{dealFoundEvent && (
+  <DealResult
+    deal={dealFoundEvent}
+    winningOffer={winningOffer ?? null}
+    budget={parsedBudget}
+  />
 )}
+
+{noDealEvent && (
+  <NoDealResult
+    event={noDealEvent}
+    budget={parsedBudget}
+  />
+)}
+
+</section>
+)}
+
         {negotiationId !== null && (
   <section className="mt-16 border-t border-neutral-900 pt-10">
     <div className="mb-6 flex items-end justify-between">
@@ -711,6 +762,218 @@ const socketRef = useRef<WebSocket | null>(null);
         </section>
       </div>
     </main>
+  );
+}
+function DealResult({
+  deal,
+  winningOffer,
+  budget,
+}: {
+  deal: DealFoundEvent;
+  winningOffer: OfferCreatedEvent | null;
+  budget: number;
+}) {
+  const finalPrice = Number(deal.price);
+
+  const savings = Math.max(
+    0,
+    budget - finalPrice,
+  );
+
+  return (
+    <section className="mt-8 overflow-hidden rounded-3xl border border-emerald-900/50 bg-emerald-950/10">
+      <div className="border-b border-emerald-900/30 p-8">
+        <div className="flex flex-wrap items-start justify-between gap-6">
+          <div>
+            <div className="mb-4 flex items-center gap-2">
+              <span className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+
+              <p className="font-mono text-xs uppercase tracking-[0.2em] text-emerald-400">
+                Negotiation complete
+              </p>
+            </div>
+
+            <h2 className="text-4xl font-medium tracking-tight">
+              Deal found.
+            </h2>
+
+            <p className="mt-3 text-neutral-500">
+              UNDERBID selected the highest-value
+              valid contract within your constraints.
+            </p>
+          </div>
+
+          <div className="text-right">
+            <p className="text-sm text-neutral-600">
+              Final price
+            </p>
+
+            <p className="mt-1 text-5xl font-medium tracking-tight">
+              {formatCurrency(
+                deal.price,
+              )}
+            </p>
+
+            {savings > 0 && (
+              <p className="mt-2 text-sm text-emerald-400">
+                ₹
+                {Math.round(
+                  savings,
+                ).toLocaleString("en-IN")}{" "}
+                under budget
+              </p>
+            )}
+          </div>
+        </div>
+      </div>
+
+      <div className="grid gap-px bg-neutral-800 md:grid-cols-4">
+        <ResultMetric
+          label="Winner"
+          value={deal.seller_name}
+        />
+
+        <ResultMetric
+          label="Delivery"
+          value={
+            winningOffer
+              ? `${winningOffer.delivery_days} days`
+              : "—"
+          }
+        />
+
+        <ResultMetric
+          label="Warranty"
+          value={
+            winningOffer
+              ? `${winningOffer.warranty_months} months`
+              : "—"
+          }
+        />
+
+        <ResultMetric
+          label="Buyer utility"
+          value={
+            deal.utility_score !== null
+              ? `${(
+                  deal.utility_score * 100
+                ).toFixed(1)}`
+              : "—"
+          }
+        />
+      </div>
+
+      <div className="grid gap-8 p-8 lg:grid-cols-[1fr_0.8fr]">
+        <div>
+          <p className="mb-4 text-xs uppercase tracking-[0.2em] text-neutral-600">
+            Why this won
+          </p>
+
+          <p className="max-w-xl text-sm leading-7 text-neutral-400">
+            This offer satisfied the buyer&apos;s
+            hard constraints and produced the
+            strongest utility across price,
+            delivery and warranty using the
+            priorities you selected.
+          </p>
+        </div>
+
+        <div>
+          <p className="mb-4 text-xs uppercase tracking-[0.2em] text-neutral-600">
+            Included add-ons
+          </p>
+
+          {winningOffer &&
+          winningOffer.addons.length > 0 ? (
+            <div className="flex flex-wrap gap-2">
+              {winningOffer.addons.map(
+                (addon) => (
+                  <span
+                    key={addon}
+                    className="rounded-full border border-neutral-800 px-3 py-2 text-xs text-neutral-400"
+                  >
+                    {formatAddon(addon)}
+                  </span>
+                ),
+              )}
+            </div>
+          ) : (
+            <p className="text-sm text-neutral-600">
+              No additional add-ons.
+            </p>
+          )}
+        </div>
+      </div>
+    </section>
+  );
+}
+function NoDealResult({
+  event,
+  budget,
+}: {
+  event: NoDealEvent;
+  budget: number;
+}) {
+  return (
+    <section className="mt-8 overflow-hidden rounded-3xl border border-red-900/40 bg-red-950/10">
+      <div className="p-8">
+        <div className="mb-4 flex items-center gap-2">
+          <span className="h-2.5 w-2.5 rounded-full bg-red-400" />
+
+          <p className="font-mono text-xs uppercase tracking-[0.2em] text-red-400">
+            Negotiation closed
+          </p>
+        </div>
+
+        <h2 className="text-4xl font-medium tracking-tight">
+          No deal.
+        </h2>
+
+        <p className="mt-4 max-w-2xl text-neutral-400">
+          No seller produced a contract that
+          satisfied all of your hard constraints.
+          UNDERBID walked away instead of accepting
+          a bad deal.
+        </p>
+
+        <div className="mt-8 grid gap-3 md:grid-cols-3">
+          <ResultMetric
+            label="Hard budget"
+            value={`₹${budget.toLocaleString(
+              "en-IN",
+            )}`}
+          />
+
+          <ResultMetric
+            label="Rounds completed"
+            value={`${event.round_number} / 5`}
+          />
+
+          <ResultMetric
+            label="Outcome"
+            value="WALK AWAY"
+          />
+        </div>
+
+        {event.reason && (
+          <div className="mt-6 rounded-2xl border border-red-900/30 bg-neutral-950/50 p-5">
+            <p className="text-xs uppercase tracking-[0.15em] text-neutral-600">
+              Engine reason
+            </p>
+
+            <p className="mt-2 text-sm text-neutral-400">
+              {event.reason}
+            </p>
+          </div>
+        )}
+
+        <div className="mt-6 border-t border-red-900/20 pt-6">
+          <p className="font-mono text-xs text-neutral-600">
+            NO PAYMENT ACTION INITIATED
+          </p>
+        </div>
+      </div>
+    </section>
   );
 }
 function SellerCard({
@@ -991,6 +1254,25 @@ function InfoBlock({
 
       <p className="text-sm leading-6 text-neutral-500">
         {text}
+      </p>
+    </div>
+  );
+}
+function ResultMetric({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="bg-neutral-950 p-5">
+      <p className="text-xs uppercase tracking-[0.15em] text-neutral-600">
+        {label}
+      </p>
+
+      <p className="mt-2 font-mono text-sm text-neutral-300">
+        {value}
       </p>
     </div>
   );
