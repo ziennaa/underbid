@@ -1,8 +1,90 @@
+"use client";
+
+import { useState } from "react";
+
+type WeightKey = "price" | "delivery" | "warranty";
+
+type Weights = {
+  price: number;
+  delivery: number;
+  warranty: number;
+};
+
+const WEIGHT_KEYS: WeightKey[] = [
+  "price",
+  "delivery",
+  "warranty",
+];
+
 export default function Home() {
+  const [product, setProduct] = useState("");
+  const [budget, setBudget] = useState("");
+  const [maxDeliveryDays, setMaxDeliveryDays] =
+    useState(4);
+
+  const [weights, setWeights] = useState<Weights>({
+    price: 60,
+    delivery: 25,
+    warranty: 15,
+  });
+
+  function updateWeight(
+    changedKey: WeightKey,
+    newValue: number,
+  ) {
+    const clampedValue = Math.max(
+      0,
+      Math.min(100, newValue),
+    );
+
+    setWeights((previous) => {
+      const otherKeys = WEIGHT_KEYS.filter(
+        (key) => key !== changedKey,
+      );
+
+      const firstKey = otherKeys[0];
+      const secondKey = otherKeys[1];
+
+      const remaining = 100 - clampedValue;
+
+      const previousOtherTotal =
+        previous[firstKey] + previous[secondKey];
+
+      let firstValue: number;
+
+      if (previousOtherTotal === 0) {
+        firstValue = Math.floor(remaining / 2);
+      } else {
+        firstValue = Math.round(
+          (previous[firstKey] /
+            previousOtherTotal) *
+            remaining,
+        );
+      }
+
+      const secondValue =
+        remaining - firstValue;
+
+      return {
+        ...previous,
+        [changedKey]: clampedValue,
+        [firstKey]: firstValue,
+        [secondKey]: secondValue,
+      };
+    });
+  }
+
+  const parsedBudget = Number(budget);
+
+  const formValid =
+    product.trim().length > 0 &&
+    budget.length > 0 &&
+    Number.isFinite(parsedBudget) &&
+    parsedBudget > 0;
+
   return (
     <main className="min-h-screen bg-neutral-950 text-white">
       <div className="mx-auto max-w-6xl px-6 py-10">
-        {/* Header */}
         <header className="mb-16 flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight">
@@ -19,9 +101,7 @@ export default function Home() {
           </div>
         </header>
 
-        {/* Main content */}
         <section className="grid gap-16 lg:grid-cols-[1fr_0.8fr]">
-          {/* Left */}
           <div>
             <p className="mb-4 text-sm font-medium uppercase tracking-[0.25em] text-neutral-500">
               New negotiation
@@ -32,16 +112,46 @@ export default function Home() {
             </h2>
 
             <p className="mt-6 max-w-xl text-lg leading-8 text-neutral-400">
-              Three sellers will independently compete on price,
-              delivery and warranty while respecting their private
-              economic limits.
+              Three sellers independently compete on
+              price, delivery and warranty while
+              respecting their private economic limits.
             </p>
+
+            <div className="mt-12 rounded-2xl border border-neutral-900 bg-neutral-950 p-5">
+              <p className="mb-4 text-xs uppercase tracking-[0.2em] text-neutral-600">
+                Current buyer request
+              </p>
+
+              <div className="space-y-2 text-sm">
+                <PreviewRow
+                  label="Product"
+                  value={
+                    product.trim() ||
+                    "Not selected"
+                  }
+                />
+
+                <PreviewRow
+                  label="Hard budget"
+                  value={
+                    budget
+                      ? `₹${Number(
+                          budget,
+                        ).toLocaleString("en-IN")}`
+                      : "Not selected"
+                  }
+                />
+
+                <PreviewRow
+                  label="Delivery limit"
+                  value={`${maxDeliveryDays} days`}
+                />
+              </div>
+            </div>
           </div>
 
-          {/* Form card */}
           <div className="rounded-3xl border border-neutral-800 bg-neutral-900/60 p-7">
             <div className="space-y-6">
-              {/* Product */}
               <div>
                 <label className="mb-2 block text-sm text-neutral-400">
                   Product
@@ -49,95 +159,139 @@ export default function Home() {
 
                 <input
                   type="text"
+                  value={product}
+                  onChange={(event) =>
+                    setProduct(event.target.value)
+                  }
                   placeholder="Sony WH-1000XM5"
                   className="w-full rounded-xl border border-neutral-700 bg-neutral-950 px-4 py-3 outline-none transition focus:border-neutral-500"
                 />
               </div>
 
-              {/* Budget */}
               <div>
                 <label className="mb-2 block text-sm text-neutral-400">
                   Hard budget
                 </label>
 
                 <div className="flex items-center rounded-xl border border-neutral-700 bg-neutral-950 px-4 focus-within:border-neutral-500">
-                  <span className="text-neutral-500">₹</span>
+                  <span className="text-neutral-500">
+                    ₹
+                  </span>
 
                   <input
                     type="number"
+                    min="1"
+                    value={budget}
+                    onChange={(event) =>
+                      setBudget(event.target.value)
+                    }
                     placeholder="24000"
                     className="w-full bg-transparent px-2 py-3 outline-none"
                   />
                 </div>
 
                 <p className="mt-2 text-xs text-neutral-600">
-                  UNDERBID will never accept a deal above this amount.
+                  UNDERBID will never accept a deal
+                  above this amount.
                 </p>
               </div>
 
-              {/* Delivery */}
               <div>
                 <label className="mb-2 block text-sm text-neutral-400">
                   Maximum delivery time
                 </label>
 
                 <select
-                  defaultValue="4"
+                  value={maxDeliveryDays}
+                  onChange={(event) =>
+                    setMaxDeliveryDays(
+                      Number(event.target.value),
+                    )
+                  }
                   className="w-full rounded-xl border border-neutral-700 bg-neutral-950 px-4 py-3 outline-none"
                 >
-                  <option value="1">1 day</option>
-                  <option value="2">2 days</option>
-                  <option value="3">3 days</option>
-                  <option value="4">4 days</option>
-                  <option value="5">5 days</option>
-                  <option value="7">7 days</option>
+                  <option value={1}>1 day</option>
+                  <option value={2}>2 days</option>
+                  <option value={3}>3 days</option>
+                  <option value={4}>4 days</option>
+                  <option value={5}>5 days</option>
+                  <option value={7}>7 days</option>
                 </select>
               </div>
 
-              {/* Preference preview */}
-              <div>
-                <div className="mb-4 flex items-center justify-between">
-                  <span className="text-sm text-neutral-400">
-                    Buyer priorities
-                  </span>
+              <div className="border-t border-neutral-800 pt-6">
+                <div className="mb-5 flex items-center justify-between">
+                  <div>
+                    <p className="text-sm text-neutral-300">
+                      Buyer priorities
+                    </p>
 
-                  <span className="text-xs text-neutral-600">
-                    TOTAL 100%
+                    <p className="mt-1 text-xs text-neutral-600">
+                      Moving one priority automatically
+                      balances the others.
+                    </p>
+                  </div>
+
+                  <span className="rounded-full border border-neutral-800 px-3 py-1 font-mono text-xs text-neutral-500">
+                    TOTAL{" "}
+                    {weights.price +
+                      weights.delivery +
+                      weights.warranty}
+                    %
                   </span>
                 </div>
 
-                <div className="space-y-4">
-                  <PreferenceRow
+                <div className="space-y-6">
+                  <PreferenceControl
                     label="Price"
-                    value="60%"
-                    width="60%"
+                    value={weights.price}
+                    onChange={(value) =>
+                      updateWeight("price", value)
+                    }
                   />
 
-                  <PreferenceRow
+                  <PreferenceControl
                     label="Delivery"
-                    value="25%"
-                    width="25%"
+                    value={weights.delivery}
+                    onChange={(value) =>
+                      updateWeight(
+                        "delivery",
+                        value,
+                      )
+                    }
                   />
 
-                  <PreferenceRow
+                  <PreferenceControl
                     label="Warranty"
-                    value="15%"
-                    width="15%"
+                    value={weights.warranty}
+                    onChange={(value) =>
+                      updateWeight(
+                        "warranty",
+                        value,
+                      )
+                    }
                   />
                 </div>
               </div>
 
               <button
                 type="button"
-                className="mt-3 w-full rounded-xl bg-white px-4 py-4 font-medium text-black transition hover:bg-neutral-200"
+                disabled={!formValid}
+                className="mt-3 w-full rounded-xl bg-white px-4 py-4 font-medium text-black transition enabled:hover:bg-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-800 disabled:text-neutral-500"
               >
                 Start negotiation
               </button>
+
+              {!formValid && (
+                <p className="text-center text-xs text-neutral-600">
+                  Enter a product and valid budget to
+                  continue.
+                </p>
+              )}
             </div>
           </div>
         </section>
 
-        {/* Bottom explanation */}
         <section className="mt-24 grid gap-5 border-t border-neutral-900 pt-8 md:grid-cols-3">
           <InfoBlock
             number="01"
@@ -162,28 +316,58 @@ export default function Home() {
   );
 }
 
-function PreferenceRow({
+function PreferenceControl({
   label,
   value,
-  width,
+  onChange,
 }: {
   label: string;
-  value: string;
-  width: string;
+  value: number;
+  onChange: (value: number) => void;
 }) {
   return (
     <div>
-      <div className="mb-2 flex justify-between text-sm">
-        <span>{label}</span>
-        <span className="text-neutral-500">{value}</span>
+      <div className="mb-3 flex items-center justify-between">
+        <label className="text-sm">
+          {label}
+        </label>
+
+        <span className="font-mono text-sm text-neutral-400">
+          {value}%
+        </span>
       </div>
 
-      <div className="h-1.5 overflow-hidden rounded-full bg-neutral-800">
-        <div
-          className="h-full rounded-full bg-white"
-          style={{ width }}
-        />
-      </div>
+      <input
+        type="range"
+        min="0"
+        max="100"
+        step="1"
+        value={value}
+        onChange={(event) =>
+          onChange(Number(event.target.value))
+        }
+        className="w-full cursor-pointer accent-white"
+      />
+    </div>
+  );
+}
+
+function PreviewRow({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="flex justify-between gap-8">
+      <span className="text-neutral-600">
+        {label}
+      </span>
+
+      <span className="max-w-[60%] truncate text-right text-neutral-300">
+        {value}
+      </span>
     </div>
   );
 }
