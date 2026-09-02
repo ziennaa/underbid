@@ -14,6 +14,7 @@ import {
 import {
   connectNegotiationSocket,
   type NegotiationEvent,
+  type OfferCreatedEvent,
 } from "@/lib/socket";
 
 type WeightKey = "price" | "delivery" | "warranty";
@@ -192,6 +193,38 @@ const socketRef = useRef<WebSocket | null>(null);
     budget.length > 0 &&
     Number.isFinite(parsedBudget) &&
     parsedBudget > 0;
+    const offerEvents = receivedEvents.filter(
+      (
+        event,
+      ): event is OfferCreatedEvent =>
+        event.event_type === "OFFER_CREATED",
+    );
+    
+    const sellerNames = [
+      "SELLER A",
+      "SELLER B",
+      "SELLER C",
+    ] as const;
+    
+    const currentRound = receivedEvents.reduce(
+      (latest, event) =>
+        Math.max(
+          latest,
+          event.round_number ?? 0,
+        ),
+      0,
+    );
+    
+    const sellerHistories = sellerNames.map(
+      (sellerName) => ({
+        sellerName,
+    
+        offers: offerEvents.filter(
+          (offer) =>
+            offer.seller_name === sellerName,
+        ),
+      }),
+    );
     async function handleCreateNegotiation() {
       if (!formValid || isCreating) {
         return;
@@ -478,7 +511,11 @@ const socketRef = useRef<WebSocket | null>(null);
     </div>
   </div>
 )}
-
+{createError && (
+  <div className="rounded-xl border border-red-900/50 bg-red-950/20 px-4 py-3 text-sm text-red-400">
+    {createError}
+  </div>
+)}
 {startError && (
   <div className="rounded-xl border border-red-900/50 bg-red-950/20 px-4 py-3 text-sm text-red-400">
     {startError}
@@ -494,6 +531,57 @@ const socketRef = useRef<WebSocket | null>(null);
             </div>
           </div>
         </section>
+        {negotiationId !== null && (
+  <section className="mt-20">
+    <div className="mb-8 flex flex-wrap items-end justify-between gap-4">
+      <div>
+        <p className="text-xs uppercase tracking-[0.25em] text-neutral-600">
+          Live negotiation
+        </p>
+
+        <h2 className="mt-2 text-3xl font-medium tracking-tight">
+          Seller arena
+        </h2>
+      </div>
+
+      <div className="flex items-center gap-3">
+        <div className="rounded-full border border-neutral-800 px-4 py-2 font-mono text-xs text-neutral-400">
+          ROUND {currentRound || "—"} / 5
+        </div>
+
+        <div className="flex items-center gap-2 rounded-full border border-neutral-800 px-4 py-2">
+          <span
+            className={`h-2 w-2 rounded-full ${
+              negotiationStatus === "RUNNING"
+                ? "bg-emerald-400"
+                : negotiationStatus === "DEAL_FOUND"
+                  ? "bg-emerald-400"
+                  : negotiationStatus === "NO_DEAL"
+                    ? "bg-red-400"
+                    : "bg-neutral-600"
+            }`}
+          />
+
+          <span className="font-mono text-xs text-neutral-400">
+            {negotiationStatus}
+          </span>
+        </div>
+      </div>
+    </div>
+
+    <div className="grid gap-4 lg:grid-cols-3">
+      {sellerHistories.map(
+        ({ sellerName, offers }) => (
+          <SellerCard
+            key={sellerName}
+            sellerName={sellerName}
+            offers={offers}
+          />
+        ),
+      )}
+    </div>
+  </section>
+)}
         {negotiationId !== null && (
   <section className="mt-16 border-t border-neutral-900 pt-10">
     <div className="mb-6 flex items-end justify-between">
@@ -571,7 +659,207 @@ const socketRef = useRef<WebSocket | null>(null);
     </main>
   );
 }
+function SellerCard({
+  sellerName,
+  offers,
+}: {
+  sellerName: string;
+  offers: OfferCreatedEvent[];
+}) {
+  const latestOffer =
+    offers.length > 0
+      ? offers[offers.length - 1]
+      : null;
 
+  const isAccepted =
+    latestOffer?.status === "ACCEPTED";
+
+  return (
+    <div
+      className={`rounded-3xl border p-6 transition ${
+        isAccepted
+          ? "border-emerald-800 bg-emerald-950/10"
+          : "border-neutral-800 bg-neutral-900/40"
+      }`}
+    >
+      <div className="mb-8 flex items-center justify-between">
+        <div>
+          <p className="text-xs uppercase tracking-[0.2em] text-neutral-600">
+            Competing seller
+          </p>
+
+          <h3 className="mt-2 text-xl font-medium">
+            {sellerName}
+          </h3>
+        </div>
+
+        <span
+          className={`rounded-full px-3 py-1 font-mono text-xs ${
+            isAccepted
+              ? "bg-emerald-950 text-emerald-400"
+              : latestOffer
+                ? "bg-neutral-800 text-neutral-400"
+                : "bg-neutral-900 text-neutral-600"
+          }`}
+        >
+          {latestOffer?.status ?? "WAITING"}
+        </span>
+      </div>
+
+      {latestOffer ? (
+        <>
+          <div className="mb-8">
+            <p className="text-sm text-neutral-600">
+              Current offer
+            </p>
+
+            <p className="mt-2 text-4xl font-medium tracking-tight">
+              {formatCurrency(
+                latestOffer.price,
+              )}
+            </p>
+
+            <p className="mt-2 font-mono text-xs text-neutral-600">
+              ROUND{" "}
+              {latestOffer.round_number}
+            </p>
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <Metric
+              label="Delivery"
+              value={`${latestOffer.delivery_days} days`}
+            />
+
+            <Metric
+              label="Warranty"
+              value={`${latestOffer.warranty_months} mo`}
+            />
+          </div>
+
+          <div className="mt-6 border-t border-neutral-800 pt-5">
+            <p className="mb-3 text-xs uppercase tracking-[0.15em] text-neutral-600">
+              Offer history
+            </p>
+
+            <div className="space-y-2">
+              {offers.map((offer) => (
+                <div
+                  key={`${sellerName}-${offer.round_number}`}
+                  className="flex items-center justify-between text-sm"
+                >
+                  <span className="font-mono text-xs text-neutral-600">
+                    R{offer.round_number}
+                  </span>
+
+                  <span className="font-mono text-neutral-400">
+                    {formatCurrency(
+                      offer.price,
+                    )}
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-6 border-t border-neutral-800 pt-5">
+            <p className="mb-3 text-xs uppercase tracking-[0.15em] text-neutral-600">
+              Add-ons
+            </p>
+
+            {latestOffer.addons.length > 0 ? (
+              <div className="flex flex-wrap gap-2">
+                {latestOffer.addons.map(
+                  (addon) => (
+                    <span
+                      key={addon}
+                      className="rounded-full border border-neutral-800 px-3 py-1 text-xs text-neutral-400"
+                    >
+                      {formatAddon(addon)}
+                    </span>
+                  ),
+                )}
+              </div>
+            ) : (
+              <p className="text-sm text-neutral-700">
+                No add-ons
+              </p>
+            )}
+          </div>
+
+          {latestOffer.utility_score !==
+            null && (
+            <div className="mt-6 border-t border-neutral-800 pt-5">
+              <div className="flex items-center justify-between">
+                <span className="text-xs uppercase tracking-[0.15em] text-neutral-600">
+                  Buyer utility
+                </span>
+
+                <span className="font-mono text-sm text-neutral-300">
+                  {(
+                    latestOffer.utility_score *
+                    100
+                  ).toFixed(1)}
+                </span>
+              </div>
+            </div>
+          )}
+        </>
+      ) : (
+        <div className="flex h-56 items-center justify-center rounded-2xl border border-dashed border-neutral-800">
+          <p className="font-mono text-xs text-neutral-700">
+            WAITING FOR OFFER
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+function Metric({
+  label,
+  value,
+}: {
+  label: string;
+  value: string;
+}) {
+  return (
+    <div className="rounded-xl border border-neutral-800 bg-neutral-950 p-4">
+      <p className="text-xs text-neutral-600">
+        {label}
+      </p>
+
+      <p className="mt-1 text-sm text-neutral-300">
+        {value}
+      </p>
+    </div>
+  );
+}
+
+function formatCurrency(
+  value: string,
+) {
+  const amount = Number(value);
+
+  return new Intl.NumberFormat(
+    "en-IN",
+    {
+      style: "currency",
+      currency: "INR",
+      maximumFractionDigits: 0,
+    },
+  ).format(amount);
+}
+
+function formatAddon(addon: string) {
+  return addon
+    .split("_")
+    .map(
+      (word) =>
+        word.charAt(0).toUpperCase() +
+        word.slice(1),
+    )
+    .join(" ");
+}
 function PreferenceControl({
   label,
   value,
