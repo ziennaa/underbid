@@ -5,3 +5,7 @@ __pycache__/
 
 underbid.db
 test_underbid.db
+
+.env
+.env.*
+!.env.example
