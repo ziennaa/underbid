@@ -1,5 +1,5 @@
 from __future__ import annotations
-
+from backend.agents.strategy import StrategyDecision
 import json
 from decimal import Decimal
 
@@ -276,9 +276,31 @@ def compare_rounds(actual, expected):
                 )
 
 
-def test_phase3_engine_parity_and_privacy(client):
+def test_phase3_engine_parity_and_privacy(client, monkeypatch):
     seed = 42
+    fixed_tactics = {
+        "SELLER A": "CONCEDE_PRICE",
+        "SELLER B": "IMPROVE_TERMS",
+        "SELLER C": "ADD_VALUE",
+    }
 
+
+    def fake_choose_strategy(
+        *,
+        seller_name,
+        **kwargs,
+    ):
+        return StrategyDecision(
+            action=fixed_tactics[seller_name],
+            rationale="Deterministic test strategy.",
+            source="TEST",
+        )
+
+
+    monkeypatch.setattr(
+        "backend.service.choose_strategy",
+        fake_choose_strategy,
+    )
     payload = {
         "product": "Sony XM5",
         "budget": 24000,
@@ -317,6 +339,7 @@ def test_phase3_engine_parity_and_privacy(client):
     direct_result = run_negotiation(
         buyer,
         direct_sellers,
+        seller_tactics=fixed_tactics,
     )
 
     expected = expected_rounds(

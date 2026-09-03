@@ -15,7 +15,14 @@ CENT = Decimal("0.01")
 MAX_ROUNDS = 5
 COMPETITIVE_PRESSURE_CAP = Decimal("0.12")
 ROUND_PRESSURE_CAP = Decimal("0.10")
+SellerTactic = Literal[
+    "HOLD",
+    "CONCEDE_PRICE",
+    "ADD_VALUE",
+    "IMPROVE_TERMS",
+]
 
+TACTIC_CONCESSION_BOOST = Decimal("0.08")
 
 def money(value: Decimal | int | float | str) -> Decimal:
     return Decimal(str(value)).quantize(CENT, rounding=ROUND_HALF_UP)
@@ -72,29 +79,67 @@ class Seller:
     def __init__(self, config: SellerConfig):
         self.config = config
 
-    def _delivery_option(self) -> DeliveryOption:
-        # Sellers do not know the buyer's utility weights. They therefore use
-        # their cheapest configured delivery product deterministically.
+    def _delivery_option(
+        self,
+        tactic: SellerTactic | None = None,
+    ) -> DeliveryOption:
+        if tactic == "IMPROVE_TERMS":
+            return min(
+                self.config.delivery_options,
+                key=lambda option: (
+                    option.days,
+                    option.price_delta,
+                    option.label,
+                ),
+            )
+
         return min(
             self.config.delivery_options,
-            key=lambda option: (option.price_delta, option.days, option.label),
+            key=lambda option: (
+                option.price_delta,
+                option.days,
+                option.label,
+            ),
         )
 
-    def _warranty_months(self, current_round: int) -> int:
+    def _warranty_months(
+        self,
+        current_round: int,
+        tactic: SellerTactic | None = None,
+    ) -> int:
         options = sorted(self.config.warranty_options)
+
+        if tactic in {"ADD_VALUE", "IMPROVE_TERMS"}:
+            return options[-1]
+
         if self.config.strategy == "value":
-            # Value seller concedes through service before price: move one step
-            # up the configured warranty ladder every two rounds.
-            index = min((current_round - 1) // 2, len(options) - 1)
+            index = min(
+                (current_round - 1) // 2,
+                len(options) - 1,
+            )
             return options[index]
+
         if self.config.strategy == "accommodating":
-            # Accommodating seller upgrades once the negotiation gets serious.
-            index = min((current_round - 1) // 3, len(options) - 1)
+            index = min(
+                (current_round - 1) // 3,
+                len(options) - 1,
+            )
             return options[index]
+
         return options[0]
 
-    def _addons(self, current_round: int, base_price: Decimal) -> tuple[str, ...]:
-        if self.config.strategy != "value" or current_round < 2:
+    def _addons(
+    self,
+    current_round: int,
+    base_price: Decimal,
+    tactic: SellerTactic | None = None,
+) -> tuple[str, ...]:
+        wants_addons = (
+    self.config.strategy == "value"
+    or tactic == "ADD_VALUE"
+)
+
+        if not wants_addons or current_round < 2:
             return ()
 
         # Add-ons are included at no extra buyer price, but only if the seller's
@@ -139,11 +184,12 @@ class Seller:
         current_round: int,
         last_offer: Offer | None,
         best_competing_offer: Offer | None,
+        tactic: SellerTactic | None = None,
     ) -> Offer:
         if not 1 <= current_round <= MAX_ROUNDS:
             raise ValueError(f"current_round must be in 1..{MAX_ROUNDS}")
 
-        delivery = self._delivery_option()
+        delivery = self._delivery_option(tactic)
 
         if current_round == 1:
             base_price = money(self.config.opening_price)
@@ -170,7 +216,17 @@ class Seller:
             total_spread = self.config.opening_price - self.config.floor_price
             competitive = self._competitive_pressure(last_offer, best_competing_offer)
             deadline = self._round_pressure(current_round)
-            effective_rate = self.config.concession_rate + competitive + deadline
+            if tactic == "HOLD":
+                effective_rate = Decimal("0")
+            else:
+                effective_rate = (
+                    self.config.concession_rate
+                    + competitive
+                    + deadline
+                )  
+
+                if tactic == "CONCEDE_PRICE":
+                    effective_rate += TACTIC_CONCESSION_BOOST
 
             # Concession is a fraction of the ORIGINAL negotiable spread, not
             # a guessed amount. This allows the seller to actually reach floor.
@@ -186,7 +242,14 @@ class Seller:
             price=final_price,
             base_price=base_price,
             delivery_days=delivery.days,
-            warranty_months=self._warranty_months(current_round),
-            addons=self._addons(current_round, base_price),
+            warranty_months=self._warranty_months(
+                current_round,
+                tactic,
+            ),
+            addons=self._addons(
+                current_round,
+                base_price,
+                tactic,
+            ),
             status="ACTIVE",
         )

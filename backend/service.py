@@ -21,7 +21,8 @@ from .models import (
     OfferDB,
     SellerPrivateConfigDB,
 )
-from .agents.narrator import narrate_offer
+from .agents.strategy import choose_strategy
+
 
 def _reconstruct_sellers(
     rows: list[SellerPrivateConfigDB],
@@ -143,9 +144,39 @@ async def run_and_stream_negotiation(
         # IMPORTANT:
         # The frozen Phase-1 engine is called
         # exactly once.
+        seller_tactics: dict[str, str] = {}
+        seller_strategy_meta: dict[str, dict] = {}
+
+        for seller in sellers:
+            decision = await asyncio.to_thread(
+                choose_strategy,
+                seller_name=seller.config.name,
+                personality=seller.config.strategy,
+                price_weight=float(buyer.price_weight),
+                delivery_weight=float(buyer.delivery_weight),
+                warranty_weight=float(
+                    buyer.warranty_weight
+                ),
+                max_delivery_days=(
+                    buyer.max_delivery_days
+                ),
+            )
+
+            seller_tactics[
+                seller.config.name
+            ] = decision.action.value
+
+            seller_strategy_meta[
+                seller.config.name
+            ] = {
+                "action": decision.action.value,
+                "rationale": decision.rationale,
+                "source": decision.source,
+            }
         result = run_negotiation(
             buyer,
             sellers,
+            seller_tactics=seller_tactics,
         )
 
         for index, record in enumerate(
@@ -233,18 +264,22 @@ async def run_and_stream_negotiation(
                         utility_score,
                     )
                 )
-                narration = await asyncio.to_thread(
-                    narrate_offer,
-                    seller_name=offer.seller_name,
-                    round_number=offer.round_number,
-                    price=str(offer.price),
-                    delivery_days=offer.delivery_days,
-                    warranty_months=offer.warranty_months,
-                    addons=list(offer.addons),
-                    status=offer.status,
+                strategy_meta = seller_strategy_meta.get(
+                    offer.seller_name
                 )
 
-                offer_payload["narration"] = narration
+                if strategy_meta:
+                    offer_payload[
+                        "strategy_action"
+                    ] = strategy_meta["action"]
+
+                    offer_payload[
+                        "strategy_rationale"
+                    ] = strategy_meta["rationale"]
+
+                    offer_payload[
+                        "strategy_source"
+                    ] = strategy_meta["source"]
                 session.add(
                     EventDB(
                         negotiation_id=(

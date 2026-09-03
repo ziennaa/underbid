@@ -77,6 +77,7 @@ def run_negotiation(
     buyer: BuyerRequest,
     sellers: list[Seller],
     max_rounds: int = MAX_ROUNDS,
+    seller_tactics: dict[str, str] | None = None,
 ) -> NegotiationResult:
     if not sellers:
         raise ValueError("at least one seller is required")
@@ -92,12 +93,28 @@ def run_negotiation(
 
         # Simultaneous round: each seller sees only the completed prior round.
         for seller in sellers:
-            last_offer = previous_offers.get(seller.config.name)
-            competitor = _best_competitor_for(seller.config.name, previous_offers)
-            current_offers[seller.config.name] = seller.compute_next_offer(
+            last_offer = previous_offers.get(
+                seller.config.name
+            )
+        
+            competitor = _best_competitor_for(
+                seller.config.name,
+                previous_offers,
+            )
+        
+            tactic = (
+                seller_tactics.get(seller.config.name)
+                if seller_tactics
+                else None
+            )
+        
+            current_offers[
+                seller.config.name
+            ] = seller.compute_next_offer(
                 current_round=round_number,
                 last_offer=last_offer,
                 best_competing_offer=competitor,
+                tactic=tactic,
             )
 
         winner, winning_utility, utilities = _pick_best_valid_offer(buyer, current_offers)
