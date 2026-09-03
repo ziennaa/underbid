@@ -1114,6 +1114,33 @@ human payment authorization
 +
 server-side payment verification
 ```
+## Validation
+
+UNDERBID was stress-tested across **1,000 randomized synthetic markets**
+spanning retail anchors from ₹10,000–₹1,00,000, varying buyer budgets,
+delivery constraints, preference weights, seller economics and negotiation
+strategies.
+
+| Metric | Result |
+|---|---:|
+| Markets tested | 1,000 |
+| Economic invariant violations | **0** |
+| Seller-floor violations | **0** |
+| Buyer-budget violations | **0** |
+| Delivery-constraint violations | **0** |
+| Sellers that won at least once | **3 / 3** |
+| Distinct winning prices | **348** |
+| Agreements | 348 |
+| No-deal outcomes | 652 |
+| Average terminal round | 4.06 |
+
+The high no-deal rate is intentional: the stress-test distribution includes
+buyer budgets as low as 60% of the retail anchor and delivery requirements as
+strict as one day.
+
+The goal of this experiment is not to estimate marketplace conversion.
+It is to verify that randomized negotiations remain diverse while preserving
+hard economic constraints.
 
 ### References
 
@@ -1194,7 +1221,9 @@ meaningfully different outcomes
 ```
 
 That market engine can later sit behind real seller adapters.
-
+The current prototype does not scrape live merchant pricing. A user-provided
+typical retail price anchors randomized private seller economics, while the
+buyer budget remains an independent hard acceptance ceiling.
 ---
 
 # What would come next

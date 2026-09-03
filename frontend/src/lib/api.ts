@@ -1,5 +1,6 @@
 export type NegotiationCreateRequest = {
     product: string;
+    reference_price: number;
     budget: number;
     max_delivery_days: number;
     price_weight: number;

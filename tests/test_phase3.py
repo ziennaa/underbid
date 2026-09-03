@@ -303,6 +303,7 @@ def test_phase3_engine_parity_and_privacy(client, monkeypatch):
     )
     payload = {
         "product": "Sony XM5",
+        "reference_price": 26000,
         "budget": 24000,
         "max_delivery_days": 5,
         "price_weight": 0.6,
@@ -332,9 +333,12 @@ def test_phase3_engine_parity_and_privacy(client, monkeypatch):
     )
 
     direct_sellers = make_sellers(
-        randomize_sellers=True,
-        seed=seed,
-    )
+    randomize_sellers=True,
+    reference_price=Decimal(
+        str(payload["reference_price"])
+    ),
+    seed=seed,
+)
 
     direct_result = run_negotiation(
         buyer,

@@ -14,6 +14,7 @@ from pydantic import BaseModel, Field
 
 class NegotiationCreate(BaseModel):
     product: str = Field(min_length=1)
+    reference_price: Decimal = Field(gt=0)
     budget: Decimal = Field(gt=0)
     max_delivery_days: int = Field(gt=0)
     price_weight: float = Field(ge=0.0, le=1.0)

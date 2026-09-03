@@ -38,7 +38,7 @@ export default function PriceConvergenceChart({
           </h3>
 
           <p className="mt-2 text-sm text-neutral-600">
-            Seller offers moving toward your hard budget.
+          Seller offers moving toward your hard budget.
           </p>
         </div>
 

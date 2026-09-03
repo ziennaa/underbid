@@ -92,6 +92,7 @@ def create_negotiation(
 
     sellers = make_sellers(
         randomize_sellers=request.randomize_sellers,
+        reference_price=request.reference_price,
         seed=request.seed,
     )
 

@@ -65,6 +65,8 @@ const WEIGHT_KEYS: WeightKey[] = [
 
 export default function Home() {
   const [product, setProduct] = useState("");
+  const [referencePrice, setReferencePrice] =
+  useState("");
   const [budget, setBudget] = useState("");
   const [isCreating, setIsCreating] = useState(false);
 
@@ -224,19 +226,19 @@ const [paymentStatus, setPaymentStatus] =
     });
   }
 
-  const parsedBudget = Number(budget);
+  const parsedReferencePrice =
+  Number(referencePrice);
 
-  const formValid =
-    product.trim().length > 0 &&
-    budget.length > 0 &&
-    Number.isFinite(parsedBudget) &&
-    parsedBudget > 0;
-    const offerEvents = receivedEvents.filter(
-      (
-        event,
-      ): event is OfferCreatedEvent =>
-        event.event_type === "OFFER_CREATED",
-    );
+const parsedBudget = Number(budget);
+
+const formValid =
+  product.trim().length > 0 &&
+  referencePrice.length > 0 &&
+  Number.isFinite(parsedReferencePrice) &&
+  parsedReferencePrice > 0 &&
+  budget.length > 0 &&
+  Number.isFinite(parsedBudget) &&
+  parsedBudget > 0;
     
     const sellerNames = [
       "SELLER A",
@@ -252,7 +254,12 @@ const [paymentStatus, setPaymentStatus] =
         ),
       0,
     );
-    
+    const offerEvents = receivedEvents.filter(
+      (
+        event,
+      ): event is OfferCreatedEvent =>
+        event.event_type === "OFFER_CREATED",
+    );
     const sellerHistories = sellerNames.map(
       (sellerName) => ({
         sellerName,
@@ -363,6 +370,7 @@ const [paymentStatus, setPaymentStatus] =
       try {
         const result = await createNegotiation({
           product: product.trim(),
+          reference_price: parsedReferencePrice,
           budget: parsedBudget,
           max_delivery_days: maxDeliveryDays,
     
@@ -532,7 +540,17 @@ seed: randomizeSellers
                     "Not selected"
                   }
                 />
-
+                <PreviewRow
+  label="Typical retail price"
+  value={
+    referencePrice
+      ? `₹${Number(
+          referencePrice,
+        ).toLocaleString("en-IN")}`
+      : "Not selected"
+  }
+/> 
+ 
                 <PreviewRow
                   label="Hard budget"
                   value={
@@ -569,7 +587,33 @@ seed: randomizeSellers
                   className="w-full rounded-xl border border-neutral-700 bg-neutral-950 px-4 py-3 outline-none transition focus:border-neutral-500"
                 />
               </div>
+              <div>
+  <label className="mb-2 block text-sm text-neutral-400">
+    Typical retail price
+  </label>
 
+  <div className="flex items-center rounded-xl border border-neutral-700 bg-neutral-950 px-4 focus-within:border-neutral-500">
+    <span className="text-neutral-500">
+      ₹
+    </span>
+
+    <input
+      type="number"
+      min="1"
+      value={referencePrice}
+      onChange={(event) =>
+        setReferencePrice(event.target.value)
+      }
+      placeholder="49990"
+      className="w-full bg-transparent px-2 py-3 outline-none"
+    />
+  </div>
+
+  <p className="mt-2 text-xs leading-5 text-neutral-600">
+    Anchors the synthetic seller market.
+    Not a live merchant quote.
+  </p>
+</div>
               <div>
                 <label className="mb-2 block text-sm text-neutral-400">
                   Hard budget
@@ -757,8 +801,8 @@ seed: randomizeSellers
 
               {!formValid && (
                 <p className="text-center text-xs text-neutral-600">
-                  Enter a product and valid budget to
-                  continue.
+                  Enter a product, typical retail price
+                  and valid budget to continue.
                 </p>
               )}
             </div>
@@ -993,7 +1037,9 @@ function DealResult({
           label="Delivery"
           value={
             winningOffer
-              ? `${winningOffer.delivery_days} days`
+              ? `${winningOffer.delivery_days} day${
+                winningOffer.delivery_days === 1 ? "" : "s"
+              }`
               : "—"
           }
         />
@@ -1424,7 +1470,7 @@ const violatesHardConstraint =
   <div className="mb-6 rounded-2xl border border-neutral-800 bg-neutral-950/70 p-4">
     <div className="flex items-center justify-between gap-3">
       <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-neutral-600">
-        AI move
+      AI strategy
       </p>
 
       <span className="font-mono text-[10px] uppercase text-neutral-600">
@@ -1453,7 +1499,9 @@ const violatesHardConstraint =
           <div className="grid grid-cols-2 gap-3">
   <Metric
     label="Delivery"
-    value={`${latestOffer.delivery_days} days`}
+    value={`${latestOffer.delivery_days} day${
+      latestOffer.delivery_days === 1 ? "" : "s"
+    }`}
     warning={
       exceedsDelivery
         ? `Buyer limit: ${maxDeliveryDays} days`
