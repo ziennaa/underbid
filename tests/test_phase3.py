@@ -18,7 +18,6 @@ from backend.seller_factory import make_sellers
 from negotiation.buyer import BuyerRequest
 from negotiation.engine import run_negotiation
 
-
 FORBIDDEN_FIELDS = {
     "cost_price",
     "floor_price",

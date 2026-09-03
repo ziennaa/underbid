@@ -21,7 +21,7 @@ from .models import (
     OfferDB,
     SellerPrivateConfigDB,
 )
-
+from .agents.narrator import narrate_offer
 
 def _reconstruct_sellers(
     rows: list[SellerPrivateConfigDB],
@@ -233,7 +233,18 @@ async def run_and_stream_negotiation(
                         utility_score,
                     )
                 )
+                narration = await asyncio.to_thread(
+                    narrate_offer,
+                    seller_name=offer.seller_name,
+                    round_number=offer.round_number,
+                    price=str(offer.price),
+                    delivery_days=offer.delivery_days,
+                    warranty_months=offer.warranty_months,
+                    addons=list(offer.addons),
+                    status=offer.status,
+                )
 
+                offer_payload["narration"] = narration
                 session.add(
                     EventDB(
                         negotiation_id=(
