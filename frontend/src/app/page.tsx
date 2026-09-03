@@ -1236,7 +1236,36 @@ const violatesHardConstraint =
               {latestOffer.round_number}
             </p>
           </div>
+          {latestOffer.strategy_action && (
+  <div className="mb-6 rounded-2xl border border-neutral-800 bg-neutral-950/70 p-4">
+    <div className="flex items-center justify-between gap-3">
+      <p className="font-mono text-[10px] uppercase tracking-[0.18em] text-neutral-600">
+        AI move
+      </p>
 
+      <span className="font-mono text-[10px] uppercase text-neutral-600">
+        {latestOffer.strategy_source === "LLM"
+          ? "GROQ"
+          : "FALLBACK"}
+      </span>
+    </div>
+
+    <p className="mt-2 text-sm font-medium text-neutral-200">
+      {latestOffer.strategy_action
+        .replaceAll("_", " ")
+        .toLowerCase()
+        .replace(/\b\w/g, (character) =>
+          character.toUpperCase(),
+        )}
+    </p>
+
+    {latestOffer.strategy_rationale && (
+      <p className="mt-2 text-xs leading-5 text-neutral-500">
+        {latestOffer.strategy_rationale}
+      </p>
+    )}
+  </div>
+)}
           <div className="grid grid-cols-2 gap-3">
   <Metric
     label="Delivery"

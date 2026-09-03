@@ -19,6 +19,18 @@ export type RoundStartedEvent = {
   
     status: string;
     utility_score: number | null;
+    strategy_action?:
+        | "HOLD"
+        | "CONCEDE_PRICE"
+        | "ADD_VALUE"
+        | "IMPROVE_TERMS";
+
+    strategy_rationale?: string;
+
+    strategy_source?:
+      | "LLM"
+      | "DETERMINISTIC_FALLBACK"
+      | "TEST";
   };
   
   export type SellerWalkedEvent = {
@@ -93,3 +105,4 @@ export type RoundStartedEvent = {
   
     return socket;
   }
+
