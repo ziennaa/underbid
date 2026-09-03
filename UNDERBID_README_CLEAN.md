@@ -43,7 +43,7 @@ The buyer never accepts an offer that violates theirs.
 
 ### 1. The buyer defines the deal
 
-<img src="docs/screenshots2/01-buyer-request.png" alt="UNDERBID buyer request" width="100%">
+<img src="docs/screenshots/01-buyer-request.png" alt="UNDERBID buyer request" width="100%">
 
 The retail anchor seeds the synthetic seller market.  
 The buyer budget is a **separate hard acceptance ceiling** — it is not used to set seller prices.
@@ -52,7 +52,7 @@ The buyer budget is a **separate hard acceptance ceiling** — it is not used to
 
 ### 2. Three sellers compete live
 
-<img src="docs/screenshots2/02-live-arena.png" alt="UNDERBID live seller arena" width="100%">
+<img src="docs/screenshots/02-live-arena.png" alt="UNDERBID live seller arena" width="100%">
 
 Each seller exposes:
 
@@ -73,7 +73,7 @@ The seller-private floor and cost are never exposed to the buyer.
 
 ### 3. Offers move across rounds
 
-<img src="docs/screenshots2/price_convergence_market_movement.png" alt="UNDERBID price convergence" width="100%">
+<img src="docs/screenshots/03-price-convergence.png" alt="UNDERBID price convergence" width="100%">
 
 The engine runs a maximum of **5 simultaneous rounds**.
 
@@ -83,7 +83,7 @@ Every seller in round `R` only sees the completed public state of round `R-1`, s
 
 ### 4. A valid deal is selected
 
-<img src="docs/screenshots2/deal_found.png" alt="UNDERBID deal found" width="100%">
+<img src="docs/screenshots/04-deal-found.png" alt="UNDERBID deal found" width="100%">
 
 In this run:
 
@@ -105,7 +105,7 @@ Only offers that satisfy every hard constraint are eligible, and the valid offer
 
 ### 5. Payment requires explicit authorization
 
-<img src="docs/screenshots2/razorpay_checkout.png" alt="Razorpay test checkout" width="100%">
+<img src="docs/screenshots/05-razorpay-checkout.png" alt="Razorpay test checkout" width="100%">
 
 The frontend never tells the backend what amount to charge.
 
@@ -131,7 +131,7 @@ server-side signature verification
 
 ### 6. Payment is verified server-side
 
-<img src="docs/screenshots2/payment_verified.png" alt="UNDERBID payment verified" width="100%">
+<img src="docs/screenshots/06-payment-verified.png" alt="UNDERBID payment verified" width="100%">
 
 Checkout success is not trusted blindly.
 
@@ -147,8 +147,8 @@ With the same ₹50,000 retail anchor but a ₹30,000 hard budget:
 
 <table>
 <tr>
-<td width="50%"><img src="docs/screenshots2/30kdashboard.png" alt="No deal buyer request"></td>
-<td width="50%"><img src="docs/screenshots2/30ksellerarena.png" alt="No deal seller arena"></td>
+<td width="50%"><img src="docs/screenshots/07-no-deal-request.png" alt="No deal buyer request"></td>
+<td width="50%"><img src="docs/screenshots/08-no-deal-arena.png" alt="No deal seller arena"></td>
 </tr>
 </table>
 
@@ -156,7 +156,7 @@ All three sellers remain above the buyer's hard budget after the allowed negotia
 
 UNDERBID does **not** manufacture a deal.
 
-<img src="docs/screenshots2/nodeal.png" alt="UNDERBID no deal result" width="100%">
+<img src="docs/screenshots/09-no-deal-result.png" alt="UNDERBID no deal result" width="100%">
 
 ```text
 NO DEAL
