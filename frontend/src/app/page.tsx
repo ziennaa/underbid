@@ -1,4 +1,5 @@
 "use client";
+import Script from "next/script";
 import PriceConvergenceChart from "@/components/PriceConvergenceChart";
 import {
   useEffect,
@@ -18,7 +19,36 @@ import {
   type NoDealEvent,
   type OfferCreatedEvent,
 } from "@/lib/socket";
+declare global {
+  interface Window {
+    Razorpay: new (
+      options: RazorpayOptions,
+    ) => {
+      open: () => void;
+    };
+  }
+}
 
+type RazorpayResponse = {
+  razorpay_payment_id: string;
+  razorpay_order_id: string;
+  razorpay_signature: string;
+};
+
+type RazorpayOptions = {
+  key: string;
+  amount: number;
+  currency: string;
+  name: string;
+  description: string;
+  order_id: string;
+  handler: (
+    response: RazorpayResponse,
+  ) => void | Promise<void>;
+  theme?: {
+    color?: string;
+  };
+};
 type WeightKey = "price" | "delivery" | "warranty";
 
 type Weights = {
@@ -72,7 +102,13 @@ const socketRef = useRef<WebSocket | null>(null);
     "ERROR"
   >("DISCONNECTED");
 
+  const [isPaying, setIsPaying] =
+  useState(false);
 
+const [paymentStatus, setPaymentStatus] =
+  useState<
+    "IDLE" | "VERIFIED" | "FAILED"
+  >("IDLE");
   useEffect(() => {
     if (negotiationId === null) {
       return;
@@ -321,6 +357,8 @@ const socketRef = useRef<WebSocket | null>(null);
       setNegotiationStatus("CREATED");
       setSocketStatus("DISCONNECTED");
       setReceivedEvents([]);
+      setPaymentStatus("IDLE");
+      setIsPaying(false);
     
       try {
         const result = await createNegotiation({
@@ -352,9 +390,102 @@ seed: randomizeSellers
         setIsCreating(false);
       }
     }
-
+    async function handlePayment() {
+      if (
+        negotiationId === null ||
+        !dealFoundEvent
+      ) {
+        return;
+      }
+    
+      try {
+        setIsPaying(true);
+        setPaymentStatus("IDLE");
+    
+        const apiBaseUrl =
+          process.env.NEXT_PUBLIC_API_URL ??
+          "http://127.0.0.1:8000";
+    
+        const orderResponse = await fetch(
+          `${apiBaseUrl}/api/negotiations/${negotiationId}/payment/order`,
+          {
+            method: "POST",
+          },
+        );
+    
+        if (!orderResponse.ok) {
+          throw new Error(
+            "Could not create payment order",
+          );
+        }
+    
+        const order = await orderResponse.json();
+    
+        if (!window.Razorpay) {
+          throw new Error(
+            "Razorpay Checkout failed to load",
+          );
+        }
+    
+        const options: RazorpayOptions = {
+          key: order.key_id,
+          amount: order.amount,
+          currency: order.currency,
+          name: "UNDERBID",
+          description: `Final deal with ${order.seller_name}`,
+          order_id: order.order_id,
+    
+          handler: async (
+            response: RazorpayResponse,
+          ) => {
+            const verifyResponse = await fetch(
+              `${apiBaseUrl}/api/negotiations/${negotiationId}/payment/verify`,
+              {
+                method: "POST",
+                headers: {
+                  "Content-Type":
+                    "application/json",
+                },
+                body: JSON.stringify({
+                  razorpay_payment_id:
+                    response.razorpay_payment_id,
+                  razorpay_order_id:
+                    response.razorpay_order_id,
+                  razorpay_signature:
+                    response.razorpay_signature,
+                }),
+              },
+            );
+    
+            if (!verifyResponse.ok) {
+              setPaymentStatus("FAILED");
+              setIsPaying(false);
+              return;
+            }
+    
+            setPaymentStatus("VERIFIED");
+            setIsPaying(false);
+          },
+        };
+    
+        const razorpay =
+          new window.Razorpay(options);
+    
+        razorpay.open();
+    
+        setIsPaying(false);
+      } catch (error) {
+        console.error(error);
+        setPaymentStatus("FAILED");
+        setIsPaying(false);
+      }
+    }
   return (
     <main className="min-h-screen bg-neutral-950 text-white">
+      <Script
+        src="https://checkout.razorpay.com/v1/checkout.js"
+        strategy="afterInteractive"
+      />
       <div className="mx-auto max-w-6xl px-6 py-10">
         <header className="mb-16 flex items-center justify-between">
           <div>
@@ -696,6 +827,9 @@ seed: randomizeSellers
     deal={dealFoundEvent}
     winningOffer={winningOffer ?? null}
     budget={parsedBudget}
+    isPaying={isPaying}
+    paymentStatus={paymentStatus}
+    onPay={handlePayment}
   />
 )}
 
@@ -781,10 +915,19 @@ function DealResult({
   deal,
   winningOffer,
   budget,
+  isPaying,
+  paymentStatus,
+  onPay,
 }: {
   deal: DealFoundEvent;
   winningOffer: OfferCreatedEvent | null;
   budget: number;
+  isPaying: boolean;
+  paymentStatus:
+    | "IDLE"
+    | "VERIFIED"
+    | "FAILED";
+  onPay: () => void;
 }) {
   const finalPrice = Number(deal.price);
 
@@ -917,6 +1060,47 @@ function DealResult({
           )}
         </div>
       </div>
+      <div className="border-t border-emerald-900/30 p-8">
+  {paymentStatus === "VERIFIED" ? (
+    <div className="rounded-2xl border border-emerald-800 bg-emerald-950/30 p-5">
+      <p className="font-medium text-emerald-400">
+        Payment verified.
+      </p>
+
+      <p className="mt-1 text-sm text-neutral-500">
+        Agreement settled through Razorpay Test Mode.
+      </p>
+    </div>
+  ) : (
+    <>
+      <button
+        type="button"
+        onClick={onPay}
+        disabled={isPaying}
+        className="w-full rounded-xl bg-white px-5 py-4 font-medium text-black transition enabled:hover:bg-neutral-200 disabled:cursor-not-allowed disabled:bg-neutral-700"
+      >
+        {isPaying
+          ? "Opening secure checkout..."
+          : `Authorize ₹${Number(
+              deal.price,
+            ).toLocaleString("en-IN", {
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2,
+            })}`}
+      </button>
+
+      <p className="mt-3 text-center text-xs text-neutral-600">
+        Razorpay Test Mode · No real money
+      </p>
+
+      {paymentStatus === "FAILED" && (
+        <p className="mt-3 text-center text-sm text-red-400">
+          Payment verification failed. Try again.
+        </p>
+      )}
+    </>
+  )}
+</div>
     </section>
   );
 }
