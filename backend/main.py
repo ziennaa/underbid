@@ -15,13 +15,18 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from .manager import manager
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 from sqlmodel import Session, select
 
 from negotiation.buyer import BuyerRequest
 
 from .database import create_db_and_tables, get_session
-from .models import NegotiationDB, OfferDB, SellerPrivateConfigDB
+from .models import (
+    EventDB,
+    NegotiationDB,
+    OfferDB,
+    SellerPrivateConfigDB,
+)
 from .schemas import (
     NegotiationCreate,
     NegotiationCreatedResponse,
@@ -32,7 +37,11 @@ from .schemas import (
 )
 from .service import run_and_stream_negotiation
 from .seller_factory import make_sellers
-
+from .payments import (
+    create_razorpay_order,
+    get_razorpay_key_id,
+    verify_razorpay_payment,
+)
 
 @asynccontextmanager
 async def lifespan(_: FastAPI) -> AsyncIterator[None]:
@@ -264,8 +273,201 @@ def start_negotiation(
         negotiation_id=negotiation_id,
         status="RUNNING",
     )
+class PaymentVerificationRequest(BaseModel):
+    razorpay_payment_id: str
+    razorpay_order_id: str
+    razorpay_signature: str
+@app.post(
+    "/api/negotiations/{negotiation_id}/payment/order",
+    status_code=status.HTTP_201_CREATED,
+)
+def create_payment_order(
+    negotiation_id: int,
+    session: Session = Depends(get_session),
+) -> dict:
 
+    negotiation = session.get(
+        NegotiationDB,
+        negotiation_id,
+    )
 
+    if negotiation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Negotiation not found",
+        )
+
+    if (
+        negotiation.final_price is None
+        or negotiation.winner_seller_name is None
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail=(
+                "A finalized deal is required "
+                "before payment"
+            ),
+        )
+
+    # Avoid creating multiple Razorpay orders
+    # if the buyer clicks Pay twice.
+    existing_statement = (
+        select(EventDB)
+        .where(
+            EventDB.negotiation_id
+            == negotiation_id,
+            EventDB.event_type
+            == "PAYMENT_ORDER_CREATED",
+        )
+        .order_by(EventDB.id.desc())
+    )
+
+    existing_event = session.exec(
+        existing_statement
+    ).first()
+
+    if existing_event is not None:
+        return {
+            **existing_event.payload,
+            "key_id": get_razorpay_key_id(),
+        }
+
+    try:
+        order = create_razorpay_order(
+            negotiation_id=negotiation_id,
+            amount_rupees=negotiation.final_price,
+            seller_name=(
+                negotiation.winner_seller_name
+            ),
+        )
+
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=str(exc),
+        ) from exc
+
+    except Exception as exc:
+        print(
+            "[payment] Razorpay order creation failed:",
+            type(exc).__name__,
+        )
+
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Razorpay order creation failed",
+        ) from exc
+
+    payment_payload = {
+        "negotiation_id": negotiation_id,
+        "seller_name": (
+            negotiation.winner_seller_name
+        ),
+        "amount": int(order["amount"]),
+        "currency": order["currency"],
+        "order_id": order["id"],
+        "display_amount": str(
+            negotiation.final_price
+        ),
+    }
+
+    session.add(
+        EventDB(
+            negotiation_id=negotiation_id,
+            event_type="PAYMENT_ORDER_CREATED",
+            payload=payment_payload,
+        )
+    )
+
+    session.commit()
+
+    return {
+        **payment_payload,
+        "key_id": get_razorpay_key_id(),
+    }
+@app.post(
+    "/api/negotiations/{negotiation_id}/payment/verify"
+)
+def verify_payment(
+    negotiation_id: int,
+    request: PaymentVerificationRequest,
+    session: Session = Depends(get_session),
+) -> dict:
+
+    negotiation = session.get(
+        NegotiationDB,
+        negotiation_id,
+    )
+
+    if negotiation is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Negotiation not found",
+        )
+
+    statement = (
+        select(EventDB)
+        .where(
+            EventDB.negotiation_id
+            == negotiation_id,
+            EventDB.event_type
+            == "PAYMENT_ORDER_CREATED",
+        )
+        .order_by(EventDB.id.desc())
+    )
+
+    order_event = session.exec(
+        statement
+    ).first()
+
+    if order_event is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Payment order has not been created",
+        )
+
+    server_order_id = order_event.payload[
+        "order_id"
+    ]
+
+    if request.razorpay_order_id != server_order_id:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Payment order mismatch",
+        )
+
+    try:
+        verify_razorpay_payment(
+            order_id=server_order_id,
+            payment_id=request.razorpay_payment_id,
+            signature=request.razorpay_signature,
+        )
+
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Payment verification failed",
+        ) from exc
+
+    session.add(
+        EventDB(
+            negotiation_id=negotiation_id,
+            event_type="PAYMENT_VERIFIED",
+            payload={
+                "order_id": server_order_id,
+                "payment_id": request.razorpay_payment_id,
+                "status": "VERIFIED",
+            },
+        )
+    )
+
+    session.commit()
+
+    return {
+        "negotiation_id": negotiation_id,
+        "payment_status": "VERIFIED",
+        "payment_id": request.razorpay_payment_id,
+    }
 @app.websocket(
     "/ws/negotiations/{negotiation_id}"
 )
